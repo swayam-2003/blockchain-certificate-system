@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Blockchain Certificate System</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .certificate-preview {
+            border: 2px solid #ddd;
+            padding: 20px;
+            margin-top: 20px;
+            border-radius: 8px;
+            background-color: #f8f9fa;
+        }
+        .certificate-preview h4 {
+            color: #0d6efd;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .certificate-detail {
+            margin: 10px 0;
+            padding: 5px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .certificate-detail strong {
+            color: #495057;
+        }
+        .validation-status {
+            text-align: center;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .validation-status.valid {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .validation-status.invalid {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .section-header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        .section-header i {
+            font-size: 3rem;
+            color: #0d6efd;
+            margin-bottom: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
+        <div class="container">
+            <a class="navbar-brand" href="#" onclick="return false;">
+                <i class="fas fa-certificate me-2"></i>
+                Blockchain Certificate System
+            </a>
+            <div class="ms-auto d-flex align-items-center">
+                <span class="text-light me-3" id="userEmail"></span>
+                <button id="logoutBtn" class="btn btn-light">
+                    <i class="fas fa-sign-out-alt me-2"></i>Logout
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <!-- Status Messages -->
+        <div id="statusMessage" class="alert" style="display: none;"></div>
+
+        <!-- Student View -->
+        <div id="studentView" style="display: none;">
+            <div class="section-header">
+                <i class="fas fa-search"></i>
+                <h2>Validate Certificate</h2>
+                <p class="text-muted">Enter the certificate ID to verify its authenticity</p>
+            </div>
+
+            <div class="row justify-content-center">
+                <div class="col-md-8">
+                    <div class="card">
+                        <div class="card-body">
+                            <form id="validateCertificateForm">
+                                <div class="mb-3">
+                                    <label class="form-label">Certificate ID</label>
+                                    <input type="text" class="form-control" id="certificateId" required 
+                                           placeholder="Enter the certificate ID or hash">
+                                </div>
+                                <button type="submit" class="btn btn-primary w-100">
+                                    <i class="fas fa-check-circle me-2"></i>Validate Certificate
+                                </button>
+                            </form>
+                            <div id="certificatePreview" class="certificate-preview" style="display: none;">
+                                <!-- Certificate preview will be populated here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Issuer View -->
+        <div id="issuerView" style="display: none;">
+            <div class="section-header">
+                <i class="fas fa-plus-circle"></i>
+                <h2>Generate Certificate</h2>
+                <p class="text-muted">Create a new blockchain-verified certificate</p>
+            </div>
+
+            <div class="row justify-content-center">
+                <div class="col-md-8">
+                    <div class="card">
+                        <div class="card-body">
+                            <form id="generateCertificateForm">
+                                <div class="mb-3">
+                                    <label class="form-label">Recipient Name</label>
+                                    <input type="text" class="form-control" id="studentName" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">USN (University Serial Number)</label>
+                                    <input type="text" class="form-control" id="usn" required>
+                                    <small class="text-muted">Each USN can only be used once for certificate generation.</small>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Course Name</label>
+                                    <input type="text" class="form-control" id="courseName" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Valid Until</label>
+                                    <input type="date" class="form-control" id="validUntil" required>
+                                </div>
+                                <button type="submit" class="btn btn-primary w-100">
+                                    <i class="fas fa-certificate me-2"></i>Generate Certificate
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    
+    <script>
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyAT5H3XJ2UXiIxXY4cv5Qi-blfEhd3g0kI",
+            authDomain: "certificategen-a1674.firebaseapp.com",
+            projectId: "certificategen-a1674",
+            storageBucket: "certificategen-a1674.firebasestorage.app",
+            messagingSenderId: "723848073104",
+            appId: "1:723848073104:web:5129247306262e2d22ed15"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+
+        // Get role from URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const role = urlParams.get('role');
+
+        // Status message handler
+        function showStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('statusMessage');
+            statusDiv.className = `alert alert-${type}`;
+            statusDiv.innerHTML = message;
+            statusDiv.style.display = 'block';
+            setTimeout(() => {
+                statusDiv.style.display = 'none';
+            }, 10000);
+        }
+
+        // Check authentication state
+        firebase.auth().onAuthStateChanged(async (user) => {
+            if (user) {
+                document.getElementById('userEmail').textContent = user.email;
+                
+                // Get ID token for API requests
+                const idToken = await user.getIdToken();
+                window.authToken = idToken;
+
+                // Show appropriate view based on role
+                if (role === 'issuer' && user.email.endsWith('@bmsce.ac.in')) {
+                    document.getElementById('issuerView').style.display = 'block';
+                    document.getElementById('studentView').style.display = 'none';
+                } else {
+                    document.getElementById('studentView').style.display = 'block';
+                    document.getElementById('issuerView').style.display = 'none';
+                }
+            } else {
+                window.location.href = '/';
+            }
+        });
+
+        // API request helper
+        async function makeAuthenticatedRequest(url, options = {}) {
+            const headers = {
+                'Content-Type': 'application/json'
+            };
+
+            if (window.authToken) {
+                headers['Authorization'] = `Bearer ${window.authToken}`;
+            }
+
+            const response = await fetch(url, {
+                ...options,
+                headers: {
+                    ...headers,
+                    ...options.headers
+                }
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Request failed');
+            }
+
+            return response.json();
+        }
+
+        // Generate Certificate Form Handler
+        document.getElementById('generateCertificateForm')?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const studentName = document.getElementById('studentName').value;
+            const usn = document.getElementById('usn').value;
+            const courseName = document.getElementById('courseName').value;
+            const validUntil = document.getElementById('validUntil').value;
+
+            try {
+                const response = await fetch('/api/certificates/generate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${window.authToken}`
+                    },
+                    body: JSON.stringify({
+                        studentName,
+                        usn,
+                        courseName,
+                        validUntil
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.message || 'Failed to generate certificate');
+                }
+
+                showStatus(`
+                    <div class="text-center">
+                        <i class="fas fa-check-circle text-success me-2"></i>
+                        Certificate generated successfully!
+                        <div class="mt-3">
+                            <p class="mb-2">
+                                <strong>Certificate ID:</strong><br>
+                                <div class="input-group mt-1">
+                                    <input type="text" class="form-control form-control-sm" value="${data.data.certificateId}" readonly>
+                                    <button class="btn btn-sm btn-outline-primary" onclick="copyToClipboard('${data.data.certificateId}')">
+                                        <i class="fas fa-copy"></i>
+                                    </button>
+                                </div>
+                            </p>
+                            <p class="mb-2">
+                                <strong>Transaction Hash:</strong><br>
+                                <div class="input-group mt-1">
+                                    <input type="text" class="form-control form-control-sm" value="${data.data.transactionHash}" readonly>
+                                    <button class="btn btn-sm btn-outline-primary" onclick="copyToClipboard('${data.data.transactionHash}')">
+                                        <i class="fas fa-copy"></i>
+                                    </button>
+                                </div>
+                            </p>
+                            <p class="mb-2">
+                                <strong>IPFS Hash:</strong><br>
+                                <div class="input-group mt-1">
+                                    <input type="text" class="form-control form-control-sm" value="${data.data.ipfsHash}" readonly>
+                                    <button class="btn btn-sm btn-outline-primary" onclick="copyToClipboard('${data.data.ipfsHash}')">
+                                        <i class="fas fa-copy"></i>
+                                    </button>
+                                </div>
+                            </p>
+                        </div>
+                    </div>
+                `, 'success');
+
+                // Clear form
+                document.getElementById('generateCertificateForm').reset();
+
+            } catch (error) {
+                showStatus(`
+                    <div class="text-center">
+                        <i class="fas fa-exclamation-circle text-danger me-2"></i>
+                        ${error.message}
+                    </div>
+                `, 'error');
+            }
+        });
+
+        // Validate Certificate Form Handler
+        document.getElementById('validateCertificateForm')?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const submitButton = form.querySelector('button[type="submit"]');
+            const previewDiv = document.getElementById('certificatePreview');
+            
+            try {
+                submitButton.disabled = true;
+                submitButton.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Validating...';
+                previewDiv.style.display = 'none';
+
+                const certificateId = document.getElementById('certificateId').value.trim();
+                if (!certificateId) {
+                    throw new Error('Please enter a certificate ID or transaction hash');
+                }
+
+                console.log('Attempting to validate:', certificateId);
+                
+                // Make the API request
+                const response = await fetch(`/api/certificates/validate/${encodeURIComponent(certificateId)}`);
+                const result = await response.json();
+                
+                console.log('Validation response:', result);
+
+                if (!response.ok) {
+                    throw new Error(result.message || `Validation failed: ${response.statusText}`);
+                }
+                
+                if (!result.success) {
+                    throw new Error(result.message || 'Unable to validate the certificate');
+                }
+
+                // Display the certificate data
+                const certificate = result.certificate;
+                const isExpired = new Date(certificate.validUntil) < new Date();
+                const issueDate = new Date(certificate.issueDate);
+                const validUntil = new Date(certificate.validUntil);
+                
+                previewDiv.innerHTML = `
+                    <div class="card border-${isExpired ? 'danger' : 'success'}">
+                        <div class="card-body">
+                            <div class="text-center mb-4">
+                                <i class="fas fa-certificate fa-3x ${isExpired ? 'text-danger' : 'text-success'} mb-3"></i>
+                                <h3 class="card-title">Certificate of Completion</h3>
+                                <div class="badge bg-${isExpired ? 'danger' : 'success'} mb-3">
+                                    ${isExpired ? 'EXPIRED' : 'VALID'}
+                                </div>
+                            </div>
+                            <hr>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <p class="mb-2">
+                                        <strong><i class="fas fa-user me-2"></i>Student Name:</strong><br>
+                                        <span class="ms-4">${certificate.studentName}</span>
+                                    </p>
+                                    <p class="mb-2">
+                                        <strong><i class="fas fa-id-card me-2"></i>USN:</strong><br>
+                                        <span class="ms-4">${certificate.usn}</span>
+                                    </p>
+                                    <p class="mb-2">
+                                        <strong><i class="fas fa-graduation-cap me-2"></i>Course:</strong><br>
+                                        <span class="ms-4">${certificate.courseName}</span>
+                                    </p>
+                                    <p class="mb-2">
+                                        <strong><i class="fas fa-calendar me-2"></i>Issue Date:</strong><br>
+                                        <span class="ms-4">${issueDate.toLocaleDateString()} ${issueDate.toLocaleTimeString()}</span>
+                                    </p>
+                                </div>
+                                <div class="col-md-6">
+                                    <p class="mb-2">
+                                        <strong><i class="fas fa-clock me-2"></i>Valid Until:</strong><br>
+                                        <span class="ms-4">${validUntil.toLocaleDateString()} ${validUntil.toLocaleTimeString()}</span>
+                                    </p>
+                                    <p class="mb-2">
+                                        <strong><i class="fas fa-university me-2"></i>Issuer:</strong><br>
+                                        <span class="ms-4">${certificate.issuerEmail}</span>
+                                    </p>
+                                    <p class="mb-2">
+                                        <strong><i class="fas fa-fingerprint me-2"></i>Certificate ID:</strong><br>
+                                        <div class="input-group mt-1">
+                                            <input type="text" class="form-control form-control-sm" value="${certificate.id}" readonly>
+                                            <button class="btn btn-sm btn-outline-primary" onclick="copyToClipboard('${certificate.id}')">
+                                                <i class="fas fa-copy"></i>
+                                            </button>
+                                        </div>
+                                    </p>
+                                </div>
+                            </div>
+                            ${certificate.transactionHash ? `
+                                <div class="mt-3 pt-3 border-top">
+                                    <p class="mb-2">
+                                        <strong><i class="fas fa-link me-2"></i>Blockchain Transaction:</strong><br>
+                                        <div class="input-group mt-1">
+                                            <input type="text" class="form-control form-control-sm" value="${certificate.transactionHash}" readonly>
+                                            <button class="btn btn-sm btn-outline-primary" onclick="copyToClipboard('${certificate.transactionHash}')">
+                                                <i class="fas fa-copy"></i>
+                                            </button>
+                                        </div>
+                                    </p>
+                                </div>
+                            ` : ''}
+                            <div class="mt-3 text-center">
+                                <small class="text-muted">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    Validated at: ${new Date().toLocaleString()}
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                previewDiv.style.display = 'block';
+
+                // Show success message
+                showStatus(`
+                    <div class="text-center">
+                        <i class="fas fa-check-circle text-success me-2"></i>
+                        Certificate validation successful!
+                    </div>
+                `, 'success');
+            } catch (error) {
+                console.error('Validation error:', error);
+                previewDiv.innerHTML = `
+                    <div class="alert alert-danger">
+                        <div class="text-center">
+                            <i class="fas fa-exclamation-circle fa-2x mb-2"></i>
+                            <h4>Validation Error</h4>
+                            <p>${error.message}</p>
+                            <div class="mt-3">
+                                <small class="text-muted">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    Please check:
+                                    <ul class="text-start mt-2">
+                                        <li>The certificate ID is entered correctly</li>
+                                        <li>You're using the complete transaction hash (if using a hash)</li>
+                                        <li>The certificate exists in the system</li>
+                                    </ul>
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                previewDiv.style.display = 'block';
+            } finally {
+                submitButton.disabled = false;
+                submitButton.innerHTML = '<i class="fas fa-check-circle me-2"></i>Validate Certificate';
+            }
+        });
+
+        // Copy to clipboard helper
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                showStatus(`
+                    <div class="text-center">
+                        <i class="fas fa-check text-success me-2"></i>
+                        Copied to clipboard!
+                    </div>
+                `, 'success');
+            }).catch(err => {
+                console.error('Failed to copy:', err);
+                showStatus(`
+                    <div class="text-center">
+                        <i class="fas fa-times text-danger me-2"></i>
+                        Failed to copy to clipboard
+                    </div>
+                `, 'danger');
+            });
+        }
+
+        // Direct validation helper
+        function validateCertificate(certificateId) {
+            document.getElementById('certificateId').value = certificateId;
+            document.getElementById('validateCertificateForm').dispatchEvent(new Event('submit'));
+        }
+
+        // Logout handler
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+            firebase.auth().signOut().then(() => {
+                window.location.href = '/';
+            });
+        });
+    </script>
+</body>
+</html> 

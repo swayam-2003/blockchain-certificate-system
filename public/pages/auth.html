@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Authentication - Blockchain Certificate System</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #0d6efd 0%, #0dcaf0 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+        }
+        .auth-container {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 2rem;
+            max-width: 400px;
+            width: 100%;
+            margin: 0 auto;
+        }
+        .auth-header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        .auth-header i {
+            font-size: 3rem;
+            color: #0d6efd;
+            margin-bottom: 1rem;
+        }
+        .form-control {
+            padding: 0.75rem 1rem;
+        }
+        .btn-auth {
+            padding: 0.75rem 1rem;
+            width: 100%;
+            margin-bottom: 1rem;
+        }
+        .auth-divider {
+            text-align: center;
+            margin: 1rem 0;
+            position: relative;
+        }
+        .auth-divider::before {
+            content: "";
+            position: absolute;
+            left: 0;
+            top: 50%;
+            width: 45%;
+            height: 1px;
+            background: #dee2e6;
+        }
+        .auth-divider::after {
+            content: "";
+            position: absolute;
+            right: 0;
+            top: 50%;
+            width: 45%;
+            height: 1px;
+            background: #dee2e6;
+        }
+        .error-message {
+            display: none;
+            margin-top: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="auth-container">
+            <div class="auth-header">
+                <i class="fas fa-certificate"></i>
+                <h3>Welcome</h3>
+                <p class="text-muted" id="authTypeText">Sign in to continue</p>
+            </div>
+
+            <div id="errorMessage" class="alert alert-danger error-message"></div>
+
+            <form id="authForm">
+                <div class="mb-3">
+                    <label class="form-label">Email</label>
+                    <input type="email" class="form-control" id="email" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Password</label>
+                    <input type="password" class="form-control" id="password" required>
+                </div>
+                <button type="submit" class="btn btn-primary btn-auth" id="submitButton">
+                    <i class="fas fa-sign-in-alt me-2"></i>Sign In
+                </button>
+            </form>
+
+            <div class="auth-divider">
+                <span class="bg-white px-2">or</span>
+            </div>
+
+            <button class="btn btn-danger btn-auth" onclick="signInWithGoogle()">
+                <i class="fab fa-google me-2"></i>Continue with Google
+            </button>
+
+            <div class="text-center">
+                <a href="#" id="toggleAuth" class="text-decoration-none">
+                    Don't have an account? Sign up
+                </a>
+            </div>
+
+            <div class="text-center mt-3">
+                <a href="/" class="text-decoration-none">
+                    <i class="fas fa-arrow-left me-2"></i>Back to Home
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+
+    <script>
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyAT5H3XJ2UXiIxXY4cv5Qi-blfEhd3g0kI",
+            authDomain: "certificategen-a1674.firebaseapp.com",
+            projectId: "certificategen-a1674",
+            storageBucket: "certificategen-a1674.firebasestorage.app",
+            messagingSenderId: "723848073104",
+            appId: "1:723848073104:web:5129247306262e2d22ed15"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+
+        // Get auth type from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        let authType = urlParams.get('type') || 'login';
+
+        // Update UI based on auth type
+        function updateAuthTypeUI() {
+            const isLogin = authType === 'login';
+            document.getElementById('authTypeText').textContent = isLogin ? 'Sign in to continue' : 'Create an account';
+            document.getElementById('submitButton').innerHTML = `
+                <i class="fas fa-${isLogin ? 'sign-in-alt' : 'user-plus'} me-2"></i>${isLogin ? 'Sign In' : 'Sign Up'}
+            `;
+            document.getElementById('toggleAuth').textContent = isLogin ? 
+                "Don't have an account? Sign up" : 
+                "Already have an account? Sign in";
+        }
+
+        // Toggle between login and signup
+        document.getElementById('toggleAuth').addEventListener('click', (e) => {
+            e.preventDefault();
+            authType = authType === 'login' ? 'signup' : 'login';
+            updateAuthTypeUI();
+        });
+
+        // Handle form submission
+        document.getElementById('authForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const errorDiv = document.getElementById('errorMessage');
+            const submitButton = document.getElementById('submitButton');
+
+            try {
+                submitButton.disabled = true;
+                submitButton.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Processing...';
+                errorDiv.style.display = 'none';
+
+                if (authType === 'login') {
+                    await firebase.auth().signInWithEmailAndPassword(email, password);
+                } else {
+                    await firebase.auth().createUserWithEmailAndPassword(email, password);
+                }
+
+                // Redirect to landing page after successful auth
+                window.location.href = '/pages/landing.html';
+            } catch (error) {
+                errorDiv.textContent = error.message;
+                errorDiv.style.display = 'block';
+            } finally {
+                submitButton.disabled = false;
+                updateAuthTypeUI();
+            }
+        });
+
+        // Google Sign In
+        async function signInWithGoogle() {
+            try {
+                const provider = new firebase.auth.GoogleAuthProvider();
+                await firebase.auth().signInWithPopup(provider);
+                window.location.href = '/pages/landing.html';
+            } catch (error) {
+                const errorDiv = document.getElementById('errorMessage');
+                errorDiv.textContent = error.message;
+                errorDiv.style.display = 'block';
+            }
+        }
+
+        // Check if user is already authenticated
+        firebase.auth().onAuthStateChanged((user) => {
+            if (user) {
+                window.location.href = '/pages/landing.html';
+            }
+        });
+
+        // Initial UI update
+        updateAuthTypeUI();
+    </script>
+</body>
+</html> 
