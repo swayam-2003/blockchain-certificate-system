@@ -6,10 +6,14 @@ package-lock.json
 .env
 .env.local
 .env.*.local
+!.env.template
 
 # Firebase
 src/config/keys/
-*.json
+firebase-service-account.json
+certificategen-a1674-firebase-adminsdk-fbsvc-100cd84289.json
+!firebase-config.template.json
+!firebase-web-config.template.js
 
 # Build files
 build/

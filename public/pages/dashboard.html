@@ -142,6 +142,28 @@
                 </div>
             </div>
         </div>
+
+        <!-- Approver View -->
+        <div id="approverView" class="mt-4" style="display: none;">
+            <div class="section-header">
+                <i class="fas fa-check-double"></i>
+                <h2>Certificate Approvals</h2>
+                <p class="text-muted">Review and approve pending certificates</p>
+            </div>
+
+            <div class="row justify-content-center">
+                <div class="col-md-10">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">Pending Approvals</h5>
+                            <div id="pendingApprovalsList" class="list-group mt-3">
+                                <!-- Pending approvals will be populated here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Firebase SDK -->
@@ -149,16 +171,8 @@
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
     
     <script>
-        // Firebase configuration
-        const firebaseConfig = {
-            apiKey: "AIzaSyAT5H3XJ2UXiIxXY4cv5Qi-blfEhd3g0kI",
-            authDomain: "certificategen-a1674.firebaseapp.com",
-            projectId: "certificategen-a1674",
-            storageBucket: "certificategen-a1674.firebasestorage.app",
-            messagingSenderId: "723848073104",
-            appId: "1:723848073104:web:5129247306262e2d22ed15"
-        };
-
+        // Firebase configuration will be loaded from environment
+        const firebaseConfig = JSON.parse(process.env.FIREBASE_WEB_CONFIG || '{}');
         // Initialize Firebase
         firebase.initializeApp(firebaseConfig);
 
@@ -186,13 +200,24 @@
                 const idToken = await user.getIdToken();
                 window.authToken = idToken;
 
-                // Show appropriate view based on role
-                if (role === 'issuer' && user.email.endsWith('@bmsce.ac.in')) {
+                // Get role from URL parameters
+                const urlParams = new URLSearchParams(window.location.search);
+                const role = urlParams.get('role');
+
+                // Hide all role boxes by default
+                document.getElementById('issuerView').style.display = 'none';
+                document.getElementById('approverView').style.display = 'none';
+                document.getElementById('studentView').style.display = 'none';
+
+                // Show only the correct section for each role
+                if (role === 'vtu-issuer') {
                     document.getElementById('issuerView').style.display = 'block';
-                    document.getElementById('studentView').style.display = 'none';
-                } else {
+                } else if (role === 'vtu-approver' || role === 'principal-approver' || role === 'dept-approver') {
+                    document.getElementById('approverView').style.display = 'block';
+                    loadPendingApprovals();
+                } else if (role === 'student') {
                     document.getElementById('studentView').style.display = 'block';
-                    document.getElementById('issuerView').style.display = 'none';
+                    loadStudentCertificates();
                 }
             } else {
                 window.location.href = '/';
@@ -344,55 +369,50 @@
                 const validUntil = new Date(certificate.validUntil);
                 
                 previewDiv.innerHTML = `
-                    <div class="card border-${isExpired ? 'danger' : 'success'}">
+                    <div class="card">
                         <div class="card-body">
-                            <div class="text-center mb-4">
-                                <i class="fas fa-certificate fa-3x ${isExpired ? 'text-danger' : 'text-success'} mb-3"></i>
-                                <h3 class="card-title">Certificate of Completion</h3>
-                                <div class="badge bg-${isExpired ? 'danger' : 'success'} mb-3">
-                                    ${isExpired ? 'EXPIRED' : 'VALID'}
-                                </div>
+                            <h4 class="text-center mb-4">Certificate Details</h4>
+                            
+                            <div class="certificate-detail">
+                                <strong>Student Name:</strong> ${certificate.studentName}
                             </div>
-                            <hr>
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <p class="mb-2">
-                                        <strong><i class="fas fa-user me-2"></i>Student Name:</strong><br>
-                                        <span class="ms-4">${certificate.studentName}</span>
-                                    </p>
-                                    <p class="mb-2">
-                                        <strong><i class="fas fa-id-card me-2"></i>USN:</strong><br>
-                                        <span class="ms-4">${certificate.usn}</span>
-                                    </p>
-                                    <p class="mb-2">
-                                        <strong><i class="fas fa-graduation-cap me-2"></i>Course:</strong><br>
-                                        <span class="ms-4">${certificate.courseName}</span>
-                                    </p>
-                                    <p class="mb-2">
-                                        <strong><i class="fas fa-calendar me-2"></i>Issue Date:</strong><br>
-                                        <span class="ms-4">${issueDate.toLocaleDateString()} ${issueDate.toLocaleTimeString()}</span>
-                                    </p>
-                                </div>
-                                <div class="col-md-6">
-                                    <p class="mb-2">
-                                        <strong><i class="fas fa-clock me-2"></i>Valid Until:</strong><br>
-                                        <span class="ms-4">${validUntil.toLocaleDateString()} ${validUntil.toLocaleTimeString()}</span>
-                                    </p>
-                                    <p class="mb-2">
-                                        <strong><i class="fas fa-university me-2"></i>Issuer:</strong><br>
-                                        <span class="ms-4">${certificate.issuerEmail}</span>
-                                    </p>
-                                    <p class="mb-2">
-                                        <strong><i class="fas fa-fingerprint me-2"></i>Certificate ID:</strong><br>
-                                        <div class="input-group mt-1">
-                                            <input type="text" class="form-control form-control-sm" value="${certificate.id}" readonly>
-                                            <button class="btn btn-sm btn-outline-primary" onclick="copyToClipboard('${certificate.id}')">
-                                                <i class="fas fa-copy"></i>
-                                            </button>
-                                        </div>
-                                    </p>
-                                </div>
+                            <div class="certificate-detail">
+                                <strong>Course:</strong> ${certificate.courseName}
                             </div>
+                            <div class="certificate-detail">
+                                <strong>USN:</strong> ${certificate.usn}
+                            </div>
+                            <div class="certificate-detail">
+                                <strong>Issue Date:</strong> ${issueDate.toLocaleDateString()}
+                            </div>
+                            <div class="certificate-detail">
+                                <strong>Valid Until:</strong> ${validUntil.toLocaleDateString()}
+                            </div>
+                            <div class="certificate-detail">
+                                <strong>Issued By:</strong> ${certificate.issuerEmail}
+                            </div>
+                            
+                            <div class="validation-status ${isExpired ? 'invalid' : 'valid'} mt-3">
+                                <i class="fas ${isExpired ? 'fa-times-circle' : 'fa-check-circle'} me-2"></i>
+                                ${isExpired ? 'Certificate has expired' : 'Certificate is valid'}
+                            </div>
+
+                            ${certificate.status === 'active' ? `
+                                <div class="validation-status valid mt-3">
+                                    <i class="fas fa-check-circle me-2"></i>
+                                    Certificate is valid
+                                </div>
+                                <div class="validation-status valid mt-3">
+                                    <i class="fas fa-check-circle me-2"></i>
+                                    Certificate Fully Approved
+                                </div>
+                            ` : `
+                                <div class="validation-status pending mt-3">
+                                    <i class="fas fa-clock me-2"></i>
+                                    Pending approvals by: ${certificate.pendingApprovers.join(', ')}
+                                </div>
+                            `}
+
                             ${certificate.transactionHash ? `
                                 <div class="mt-3 pt-3 border-top">
                                     <p class="mb-2">
@@ -412,6 +432,10 @@
                                     Validated at: ${new Date().toLocaleString()}
                                 </small>
                             </div>
+
+                            ${certificate.isPrincipalApproved ? `<div class='certificate-detail'><strong>Principal Approved By:</strong> ${certificate.principalApprover || 'N/A'}<br><small>Date: ${certificate.principalApprovalDate ? new Date(certificate.principalApprovalDate).toLocaleString() : 'N/A'}</small></div>` : `<div class='certificate-detail'><strong>Principal Approval:</strong> Pending</div>`}
+                            ${certificate.isDeptApproved ? `<div class='certificate-detail'><strong>Department Approved By:</strong> ${certificate.deptApprover || 'N/A'}<br><small>Date: ${certificate.deptApprovalDate ? new Date(certificate.deptApprovalDate).toLocaleString() : 'N/A'}</small></div>` : `<div class='certificate-detail'><strong>Department Approval:</strong> Pending</div>`}
+                            ${certificate.isVTUApproved ? `<div class='certificate-detail'><strong>VTU Approved By:</strong> ${certificate.vtuApprover || 'N/A'}<br><small>Date: ${certificate.vtuApprovalDate ? new Date(certificate.vtuApprovalDate).toLocaleString() : 'N/A'}</small></div>` : `<div class='certificate-detail'><strong>VTU Approval:</strong> Pending</div>`}
                         </div>
                     </div>
                 `;
@@ -473,10 +497,234 @@
             });
         }
 
-        // Direct validation helper
-        function validateCertificate(certificateId) {
-            document.getElementById('certificateId').value = certificateId;
-            document.getElementById('validateCertificateForm').dispatchEvent(new Event('submit'));
+        // Direct validation helper for View Details
+        async function validateCertificate(certificateId) {
+            const previewDiv = document.getElementById('certificatePreview');
+            try {
+                // Make the API request
+                const response = await fetch(`/api/certificates/validate/${encodeURIComponent(certificateId)}`, {
+                    headers: {
+                        'Authorization': `Bearer ${window.authToken}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch certificate details`);
+                }
+
+                const result = await response.json();
+                
+                if (!result.success) {
+                    throw new Error(result.message || 'Unable to fetch certificate details');
+                }
+
+                // Display the certificate data in a modal
+                const certificate = result.certificate;
+                const issueDate = new Date(certificate.issueDate);
+                const validUntil = new Date(certificate.validUntil);
+                
+                // Create and show modal
+                const modalHtml = `
+                    <div class="modal fade" id="certificateDetailsModal" tabindex="-1">
+                        <div class="modal-dialog">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title">Certificate Details</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                </div>
+                                <div class="modal-body">
+                                    <div class="certificate-detail">
+                                        <strong>Student Name:</strong> ${certificate.studentName}
+                                    </div>
+                                    <div class="certificate-detail">
+                                        <strong>Course:</strong> ${certificate.courseName}
+                                    </div>
+                                    <div class="certificate-detail">
+                                        <strong>USN:</strong> ${certificate.usn}
+                                    </div>
+                                    <div class="certificate-detail">
+                                        <strong>Issue Date:</strong> ${issueDate.toLocaleDateString()}
+                                    </div>
+                                    <div class="certificate-detail">
+                                        <strong>Valid Until:</strong> ${validUntil.toLocaleDateString()}
+                                    </div>
+                                    <div class="certificate-detail">
+                                        <strong>Issuer:</strong> ${certificate.issuerEmail}
+                                    </div>
+                                    ${certificate.transactionHash ? `
+                                        <div class="certificate-detail">
+                                            <strong>Transaction Hash:</strong>
+                                            <div class="input-group mt-1">
+                                                <input type="text" class="form-control form-control-sm" value="${certificate.transactionHash}" readonly>
+                                                <button class="btn btn-sm btn-outline-primary" onclick="copyToClipboard('${certificate.transactionHash}')">
+                                                    <i class="fas fa-copy"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                // Remove any existing modal
+                const existingModal = document.getElementById('certificateDetailsModal');
+                if (existingModal) {
+                    existingModal.remove();
+                }
+
+                // Add new modal to body
+                document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+                // Show the modal
+                const modal = new bootstrap.Modal(document.getElementById('certificateDetailsModal'));
+                modal.show();
+
+            } catch (error) {
+                console.error('Error fetching certificate details:', error);
+                showStatus(`Error: ${error.message}`, 'danger');
+            }
+        }
+
+        // Approve certificate function
+        async function approveCertificate(certificateId) {
+            try {
+                const approveButton = document.querySelector(`button[onclick="approveCertificate('${certificateId}')"]`);
+                if (approveButton) {
+                    approveButton.disabled = true;
+                    approveButton.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Approving...';
+                }
+
+                // Get role from URL parameters
+                const urlParams = new URLSearchParams(window.location.search);
+                const role = urlParams.get('role');
+
+                const response = await fetch(`/api/certificates/${certificateId}/approve?role=${role}`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${window.authToken}`
+                    }
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.message || `Approval failed: ${response.statusText}`);
+                }
+
+                if (!result.success) {
+                    throw new Error(result.message || 'Failed to approve certificate');
+                }
+
+                showStatus(`
+                    <div class="text-center">
+                        <i class="fas fa-check-circle text-success me-2"></i>
+                        Certificate approved successfully!
+                    </div>
+                `, 'success');
+
+                // Remove the approved certificate from the list with animation
+                const certificateElement = approveButton.closest('.list-group-item');
+                if (certificateElement) {
+                    certificateElement.style.transition = 'all 0.5s';
+                    certificateElement.style.opacity = '0';
+                    certificateElement.style.height = '0';
+                    setTimeout(() => {
+                        certificateElement.remove();
+                        // Check if there are no more pending certificates
+                        const pendingList = document.getElementById('pendingApprovalsList');
+                        if (!pendingList.children.length) {
+                            pendingList.innerHTML = `
+                                <div class="text-center text-muted">
+                                    <i class="fas fa-inbox fa-3x mb-3"></i>
+                                    <p>No pending approvals found</p>
+                                </div>
+                            `;
+                        }
+                    }, 500);
+                }
+            } catch (error) {
+                console.error('Error approving certificate:', error);
+                showStatus(`
+                    <div class="text-center">
+                        <i class="fas fa-exclamation-circle text-danger me-2"></i>
+                        ${error.message}
+                    </div>
+                `, 'danger');
+            } finally {
+                const approveButton = document.querySelector(`button[onclick="approveCertificate('${certificateId}')"]`);
+                if (approveButton) {
+                    approveButton.disabled = false;
+                    approveButton.innerHTML = '<i class="fas fa-check me-2"></i>Approve';
+                }
+            }
+        }
+
+        // Load pending approvals for approver
+        async function loadPendingApprovals() {
+            try {
+                console.log('Loading pending approvals...');
+                // Get role from URL parameters
+                const urlParams = new URLSearchParams(window.location.search);
+                const role = urlParams.get('role');
+
+                const response = await fetch(`/api/certificates/pending-approvals?role=${role}`, {
+                    headers: {
+                        'Authorization': `Bearer ${window.authToken}`
+                    }
+                });
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                const pendingList = document.getElementById('pendingApprovalsList');
+                pendingList.innerHTML = '';
+                if (data.success && data.certificates && data.certificates.length > 0) {
+                    data.certificates.forEach(cert => {
+                        const issueDate = new Date(cert.issueDate).toLocaleDateString();
+                        const item = document.createElement('div');
+                        item.className = 'list-group-item';
+                        item.innerHTML = `
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h5 class="mb-1">${cert.studentName}</h5>
+                                    <p class="mb-1">Course: ${cert.courseName}</p>
+                                    <small class="text-muted">
+                                        USN: ${cert.usn}<br>
+                                        Issued on: ${issueDate}<br>
+                                        By: ${cert.issuerEmail}
+                                    </small>
+                                    <div class="mt-2">
+                                        <small class="text-muted">
+                                            Pending Approvals: ${cert.pendingApprovals.join(', ')}
+                                        </small>
+                                    </div>
+                                </div>
+                                <div class="d-flex flex-column align-items-end">
+                                    <button class="btn btn-success mb-2" onclick="approveCertificate('${cert.certificateId}')">
+                                        <i class="fas fa-check me-2"></i>Approve
+                                    </button>
+                                    <button class="btn btn-outline-primary btn-sm" onclick="validateCertificate('${cert.certificateId}')">
+                                        <i class="fas fa-search me-2"></i>View Details
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                        pendingList.appendChild(item);
+                    });
+                } else {
+                    pendingList.innerHTML = `
+                        <div class="text-center text-muted">
+                            <i class="fas fa-inbox fa-3x mb-3"></i>
+                            <p>No pending approvals found</p>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error loading pending approvals:', error);
+                showStatus('Error loading pending approvals. Please try again.', 'error');
+            }
         }
 
         // Logout handler
@@ -485,6 +733,11 @@
                 window.location.href = '/';
             });
         });
+
+        // Add Bootstrap JS for modals
+        const bootstrapScript = document.createElement('script');
+        bootstrapScript.src = 'https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js';
+        document.head.appendChild(bootstrapScript);
     </script>
 </body>
 </html> 

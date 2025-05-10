@@ -190,6 +190,21 @@ blockchain-certificate-system/
    - Cryptographic verification
    - Timestamp validation
 
+4. **Firebase Security**:
+   - Never commit Firebase service account keys to version control
+   - Use environment variables for sensitive credentials
+   - Follow the template in `firebase-config.template.json`
+   - Keep your private keys secure and never share them
+
+## Firebase Setup
+
+1. Create a Firebase project in the Firebase Console
+2. Generate a new private key from Project Settings > Service Accounts
+3. Copy the contents of `firebase-config.template.json`
+4. Create a new file named `firebase-service-account.json` with your actual credentials
+5. Add `firebase-service-account.json` to `.gitignore`
+6. Never commit the actual service account key to version control
+
 ## IPFS Integration
 
 - Certificate metadata is stored on IPFS
